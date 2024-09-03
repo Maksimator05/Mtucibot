@@ -4,7 +4,7 @@ import sqlite3
 import random
 import asyncio
 import aiosqlite
-import copy
+
 
 bot = telebot.TeleBot('7292212331:AAHc8HtqomP8vidGw1o_9qcM6qJ860GDcMY')
 name = None
@@ -42,9 +42,12 @@ def start(message):
     if loop.run_until_complete(user_exists(chat_id)):
         bot.reply_to(message, "Вы уже зарегистрированы!")
     else:
-        bot.send_message(message.chat.id,
-                         f'Приветствую, {message.from_user.first_name}!\nТы попал на игру "Ловец душ" от МТУСИ\nDesigned by maksimator & tunknowng ',
-                         reply_markup=markup)
+        bot.send_message(
+            message.chat.id,
+            f'Приветствую, {message.from_user.first_name}!\nТы попал на игру "Собиратель душ" от МТУСИ\n_Designed by maksimator & tunknowng_',
+            parse_mode='Markdown',
+            reply_markup=markup
+        )
         bot.send_message(message.chat.id, 'Давай тебя зарегаем. Напиши свое ФИО')
         bot.register_next_step_handler(message, username)
 
@@ -55,7 +58,7 @@ def username(message):
 
     # Сохраняем имя пользователя и переходим к запросу хобби
     message.text = name
-    bot.reply_to(message, "Отлично! И мне нужно еще твое напрваление")
+    bot.reply_to(message, "Отлично! И мне нужно еще твое направление")
     bot.register_next_step_handler(message, user_mean, name)
 
 
@@ -131,7 +134,7 @@ def send(message):
 
             # Проверяем, есть ли у текущего пользователя уже закрепленный пользователь
             cur.execute("SELECT target_id FROM selected_users WHERE chat_id = ?", (message.from_user.id,))
-            target_id_row = copy.deepcopy(cur.fetchone())
+            target_id_row = cur.fetchone()
             cur.close()
             conn.close()
             if target_id_row[0]:
@@ -199,11 +202,12 @@ def select_users(message):
             info[line][3] = f'{el1[4]}'
             line += 1
 
-        selected_user = copy.deepcopy(random.choice(info))
+        selected_user = random.choice(info)
         bot.send_message(message.chat.id, f'Имя: {selected_user[0]}\nНаправление: {selected_user[1]}')
         conn = sqlite3.connect('Killer.sql')
         cur = conn.cursor()
-        cur.execute("INSERT INTO selected_users (name, mean, chat_id, target_id) SELECT name, mean, chat_id, target_id FROM users" )
+        cur.execute("INSERT INTO selected_users (name, mean, chat_id, target_id) VALUES (?, ?, ?, ?)",
+                    (selected_user[0], selected_user[1], selected_user[2], selected_user[3]))
         conn.commit()
         chat_id = selected_user[2]
         exists = cur.execute("SELECT 1 FROM users WHERE chat_id = ?", [message.from_user.id]).fetchone()
