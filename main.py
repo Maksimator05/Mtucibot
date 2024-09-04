@@ -39,9 +39,7 @@ def start(message):
         bot.send_message(message.chat.id, "Вы уже зарегистрированы!")
     else:
         bot.send_message(message.chat.id,
-                         f'Приветствую, {message.from_user.first_name}!\nТы попал на игру "Собиратель душ" от МТУСИ\n_Designed by maksimator & tunknowng_',
-                         parse_mode='Markdown',
-                         reply_markup=markup)
+                         f'Приветствую, {message.from_user.first_name}!\nТы попал на игру "Собиратель душ" от МТУСИ\nDesigned by maksimator & tunknowng', reply_markup=markup)
         bot.send_message(message.chat.id, 'Давай тебя зарегаем. Напиши свое ФИО')
         bot.register_next_step_handler(message, get_username)
 
@@ -188,6 +186,16 @@ def send(message):
 def move_to_bin(message):
     conn = sqlite3.connect('Killer.sql')
     cur = conn.cursor()
+
+    exists = (cur.execute("SELECT * FROM selected_users ").fetchall())
+    if len(exists) == 2:
+        bot.send_message(message.chat.id, 'Вы победитель. Поздравляю!!!')
+
+    cur.close()
+    conn.close()
+    bot.send_message(message.text.strip(), 'Вас очистили. Вы проиграли')
+    conn = sqlite3.connect('Killer.sql')
+    cur = conn.cursor()
     cur.execute('DELETE FROM selected_users WHERE chat_id = ?',
                 (message.text.strip(),))
     conn.commit()
@@ -251,7 +259,50 @@ def select_users(message):
         cur.close()
         conn.close()
     else:
-        bot.send_message(message.chat.id, 'Никого нет дома')
+        conn = sqlite3.connect('Killer.sql')
+        cur = conn.cursor()
+        selected_users = cur.execute('SELECT * FROM selected_users WHERE NOT chat_id = ?',
+                            (message.from_user.id,)).fetchall()
+        cur.close()
+        conn.close()
+        if len(selected_users) > 0:
+            info = [[0 for j in range(4)] for i in range(len(selected_users))]
+            line = 0
+            for el1 in selected_users:
+                info[line][0] = el1[1]
+                info[line][1] = el1[2]
+                info[line][2] = el1[3]
+                info[line][3] = el1[4]
+                line += 1
+
+            selected_user = copy.deepcopy(random.choice(info))
+            bot.send_message(message.chat.id, f'Имя: {selected_user[0]}\nНаправление: {selected_user[1]}')
+
+            conn = sqlite3.connect('Killer.sql')
+            cur = conn.cursor()
+            exists = cur.execute("SELECT * FROM users WHERE chat_id = ?",
+                                 (message.chat.id,)).fetchone()
+            cur.close()
+            conn.close()
+
+            if exists:
+                conn = sqlite3.connect('Killer.sql')
+                cur = conn.cursor()
+                cur.execute("UPDATE users SET target_id = ? WHERE chat_id = ?",
+                            (selected_user[2], message.chat.id,))
+                conn.commit()
+                cur.close()
+                conn.close()
+            else:
+                conn = sqlite3.connect('Killer.sql')
+                cur = conn.cursor()
+                cur.execute("UPDATE selected_users SET target_id = ? WHERE chat_id = ?",
+                            (selected_user[2], message.chat.id,))
+                conn.commit()
+                cur.close()
+                conn.close()
+        else:
+            bot.send_message(message.chat.id, 'Никого нет дома')
 
 
 bot.polling(none_stop=True)
