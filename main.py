@@ -186,14 +186,47 @@ def send(message):
 def move_to_bin(message):
     conn = sqlite3.connect('Killer.sql')
     cur = conn.cursor()
-
-    exists = (cur.execute("SELECT * FROM selected_users ").fetchall())
-    if len(exists) == 2:
-        bot.send_message(message.chat.id, 'Вы победитель. Поздравляю!!!')
-
+    exists = (cur.execute("SELECT * FROM users")).fetchall()
+    exists_sel = (cur.execute("SELECT * FROM selected_users").fetchall())
     cur.close()
     conn.close()
+
+    if (len(exists_sel) + len(exists)) == 2:
+        bot.send_message(message.chat.id, 'Вы победитель. Поздравляю!!!')
+
     bot.send_message(message.text.strip(), 'Вас очистили. Вы проиграли')
+
+    conn = sqlite3.connect('Killer.sql')
+    cur = conn.cursor()
+    user = cur.execute("SELECT * FROM users WHERE chat_id = ?",
+                         (message.chat.id,)).fetchone()
+    cur.close()
+    conn.close()
+
+    if user:
+        conn = sqlite3.connect('Killer.sql')
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET target_id = ? WHERE chat_id = ?",
+                    (None, message.chat.id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+    else:
+        conn = sqlite3.connect('Killer.sql')
+        cur = conn.cursor()
+        cur.execute("UPDATE selected_users SET target_id = ? WHERE chat_id = ?",
+                    (None, message.chat.id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+    conn = sqlite3.connect('Killer.sql')
+    cur = conn.cursor()
+    name = cur.execute('SELECT name FROM selected_users WHERE chat_id = ?',
+                       (message.text.strip(),)).fetchone()
+    cur.close()
+    conn.close()
+
     conn = sqlite3.connect('Killer.sql')
     cur = conn.cursor()
     cur.execute('DELETE FROM selected_users WHERE chat_id = ?',
@@ -201,6 +234,8 @@ def move_to_bin(message):
     conn.commit()
     cur.close()
     conn.close()
+
+    bot.send_message(message.chat.id, f"Душа {name[0]} очищена")
 
 
 def select_users(message):
