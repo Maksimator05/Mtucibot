@@ -5,7 +5,10 @@ import random
 import asyncio
 import aiosqlite
 import copy
-
+import os
+from dotenv import load_dotenv
+load_dotenv()
+Pass_Word = os.getenv("PASSWORD")
 bot = telebot.TeleBot('7292212331:AAHc8HtqomP8vidGw1o_9qcM6qJ860GDcMY')
 
 
@@ -16,6 +19,8 @@ def start(message):
     cur.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, mean TEXT, chat_id TEXT, target_id TEXT)')
 
     cur.execute('CREATE TABLE IF NOT EXISTS selected_users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, mean TEXT, chat_id TEXT, target_id TEXT)')
+
+    cur.execute('CREATE TABLE IF NOT EXISTS admins (user_id INTEGER PRIMARY KEY, name TEXT, chat_id TEXT)')
     conn.commit()
     cur.close()
     conn.close()
@@ -27,7 +32,6 @@ def start(message):
     Bin = types.KeyboardButton('Очистить душу')
     List = types.KeyboardButton('Список')
     markup.row(Bin, List)
-
     chat_id = f'{message.chat.id}'
 
     # Используем asyncio для запуска асинхронной проверки
@@ -44,6 +48,105 @@ def start(message):
         bot.register_next_step_handler(message, get_username)
 
 
+@bot.message_handler(commands=['admin'])
+def adminstration(message):
+    conn = sqlite3.connect('Killer.sql')
+    cur = conn.cursor()
+    admin = cur.execute("SELECT * FROM admins WHERE chat_id = ?",
+                         (message.chat.id,)).fetchone()
+    cur.close()
+    conn.close()
+    if admin:
+        markup1 = types.InlineKeyboardMarkup()
+        list_info = types.InlineKeyboardButton("Список", callback_data = 'list_info')
+        delete_admin = types.InlineKeyboardButton("Удалить админа", callback_data='delete_admin')
+        markup1.row(list_info, delete_admin)
+        user_ban = types.InlineKeyboardButton("Дисквалифицировать участника", callback_data='user_ban')
+        markup1.row(user_ban)
+        bot.reply_to(message, "Добро пожаловать в администрирование игры", reply_markup=markup1)
+    else:
+        bot.send_message(message.chat.id, "Вы не админ")
+
+
+
+
+
+@bot.callback_query_handler(func=lambda call: True)
+def handle_callback(call):
+    if call.data == 'list_info':
+        # Действие при нажатии на кнопку "Список"
+        conn = sqlite3.connect('Killer.sql')
+        cur = conn.cursor()
+        cur.execute('SELECT * FROM users')
+        users = cur.fetchall()
+        info = 'Чистые души\n'
+        for el in users:
+            info += f'Имя: {el[1]}, Направление: {el[2]}, chat id: {el[3]}, target_id: {el[4]}\n'
+
+        cur.execute('SELECT * FROM selected_users')
+        users = cur.fetchall()
+        info += '\nСвязаные души\n'
+        for el1 in users:
+            info += f'Имя: {el1[1]}, Направление: {el1[2]},  {el1[3]}, chat id: {el[3]}, target_id: {el[4]}\n'
+
+        cur.execute('SELECT * FROM admins')
+        users = cur.fetchall()
+        info += '\nadmins\n'
+        for el2 in users:
+            info += f'Имя: {el2[1]}, Направление: {el2[2]}\n'
+        cur.close()
+        conn.close()
+        bot.send_message(call.message.chat.id, info)
+
+    elif call.data == 'delete_admin':
+        bot.send_message(call.message.chat.id, 'Напиши код админа')
+        bot.register_next_step_handler(call.message, delete_adn)
+
+    elif call.data == 'user_ban':
+        bot.send_message(call.message.chat.id, 'Введите его код:')
+        bot.register_next_step_handler(call.message, user_ban)
+
+
+def delete_adn(message):
+    bot.send_message(message.text.strip(), 'Вас исключили из администраторов')
+    conn = sqlite3.connect('Killer.sql')
+    cur = conn.cursor()
+    cur.execute('DELETE FROM admins WHERE chat_id = ?',
+                    (message.text.strip(),))
+    conn.commit()
+    cur.close()
+    conn.close()
+    bot.send_message(message.chat.id, 'Админ исключен')
+
+def user_ban(message):
+    conn = sqlite3.connect('Killer.sql')
+    cur = conn.cursor()
+    exists = (cur.execute("SELECT * FROM users WHERE chat_id = ?", (message.text.strip(),))).fetchone()
+    exists_sel = (cur.execute("SELECT * FROM selected_users WHERE chat_id = ?", (message.text.strip(),))).fetchone()
+    cur.close()
+    conn.close()
+
+    if exists:
+        bot.send_message(message.text.strip(), 'Вас дисквалифицировали')
+        conn = sqlite3.connect('Killer.sql')
+        cur = conn.cursor()
+        cur.execute('DELETE FROM users WHERE chat_id = ?',
+                    (message.text.strip(),))
+        conn.commit()
+        cur.close()
+        conn.close()
+    else:
+        bot.send_message(message.text.strip(), 'Вас дисквалифицировали')
+        conn = sqlite3.connect('Killer.sql')
+        cur = conn.cursor()
+        cur.execute('DELETE FROM selected_users WHERE chat_id = ?',
+                    (message.text.strip(),))
+        conn.commit()
+        cur.close()
+        conn.close()
+    bot.send_message(message.chat.id, 'Игрок дисквалифицирован')
+
+
 # Функция для получения имени пользователя и его регистрации
 def get_username(message):
     name = message.text  # Имя пользователя, которое он отправил
@@ -54,14 +157,17 @@ def get_username(message):
 # Функция для получения направления пользователя и его регистрации
 def get_user_mean(message, name):
     mean = message.text
-    chat_id = message.chat.id
-
-    # Используем asyncio для регистрации пользователя
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+    chat_id = message.chat.id
+    if mean == 'Админ':
+        bot.send_message(message.chat.id, f"Введите пароль")
+        bot.register_next_step_handler(message, pass_word, name)
 
-    loop.run_until_complete(register_user(name, mean, chat_id))
-    bot.send_message(message.chat.id, f"Ты зареган\nТвое кодовое слово: {chat_id}")
+
+    else:
+        loop.run_until_complete(register_user(name, mean, chat_id))
+        bot.send_message(message.chat.id, f"Ты зареган\nТвое кодовое слово: {chat_id}")
 
 
 # Асинхронная функция для регистрации пользователя
@@ -90,6 +196,26 @@ async def user_exists(chat_id: str):
                         exists1 = await cursor.fetchone()
                         return exists1 is not None
 
+
+async def register_admin(name: str, chat_id: str):
+    async with aiosqlite.connect('Killer.sql') as db:
+        await db.execute(
+            "INSERT INTO admins (name, chat_id) VALUES (?, ?)",
+            (name, chat_id)
+        )
+        await db.commit()
+
+
+def pass_word(message, name):
+    password_from_user = message.text
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    chat_id = message.chat.id
+    if password_from_user == Pass_Word:
+        loop.run_until_complete(register_admin(name, chat_id))
+        bot.send_message(message.chat.id, "Вы успешно зарегестрированы, как админ")
+    else:
+        bot.send_message(message.chat.id, "Вы не являетесь доверенным лицом")
 
 
 @bot.message_handler(content_types=['text'])
@@ -339,5 +465,7 @@ def select_users(message):
         else:
             bot.send_message(message.chat.id, 'Никого нет дома')
 
+def cancel_(message):
+    bot.send_message(message.chat.id, "не ударь в грязь лицом")
 
 bot.polling(none_stop=True)
