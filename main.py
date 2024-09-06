@@ -7,9 +7,12 @@ import aiosqlite
 import copy
 import os
 from dotenv import load_dotenv
+
 load_dotenv()
 Pass_Word = os.getenv("PASSWORD")
-bot = telebot.TeleBot('7292212331:AAHc8HtqomP8vidGw1o_9qcM6qJ860GDcMY')
+bot_token = os.getenv("BOT_TOKEN")
+
+bot = telebot.TeleBot(bot_token)
 
 
 @bot.message_handler(commands=['start'])
@@ -30,8 +33,9 @@ def start(message):
     Rulls = types.KeyboardButton('Правила')
     markup.row(Object, Rulls)
     Bin = types.KeyboardButton('Очистить душу')
-    List = types.KeyboardButton('Список')
+    List = types.KeyboardButton('Число онлайн')
     markup.row(Bin, List)
+
     chat_id = f'{message.chat.id}'
 
     # Используем asyncio для запуска асинхронной проверки
@@ -68,43 +72,50 @@ def adminstration(message):
         bot.send_message(message.chat.id, "Вы не админ")
 
 
-
-
+markup_cancel = types.InlineKeyboardMarkup()
+cancel_btn = types.InlineKeyboardButton("Отмена", callback_data='cancel_btn')
+markup_cancel.row(cancel_btn)
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
     if call.data == 'list_info':
-        # Действие при нажатии на кнопку "Список"
         conn = sqlite3.connect('Killer.sql')
         cur = conn.cursor()
         cur.execute('SELECT * FROM users')
         users = cur.fetchall()
         info = 'Чистые души\n'
         for el in users:
-            info += f'Имя: {el[1]}, Направление: {el[2]}, chat id: {el[3]}, target_id: {el[4]}\n'
+            info += f'Имя: {el[1]}, Направление: {el[2]}, Код: {el[3]}, Цель: {el[4]}\n'
 
         cur.execute('SELECT * FROM selected_users')
         users = cur.fetchall()
         info += '\nСвязаные души\n'
-        for el1 in users:
-            info += f'Имя: {el1[1]}, Направление: {el1[2]},  {el1[3]}, chat id: {el[3]}, target_id: {el[4]}\n'
+
+        for el in users:
+            info += f'Имя: {el[1]}, Направление: {el[2]}, Код: {el[3]}, Цель: {el[4]}\n'
 
         cur.execute('SELECT * FROM admins')
         users = cur.fetchall()
         info += '\nadmins\n'
-        for el2 in users:
-            info += f'Имя: {el2[1]}, Направление: {el2[2]}\n'
+
+        for el in users:
+            info += f'Имя: {el[1]}, Код: {el[2]}\n'
+
         cur.close()
         conn.close()
+
         bot.send_message(call.message.chat.id, info)
 
     elif call.data == 'delete_admin':
-        bot.send_message(call.message.chat.id, 'Напиши код админа')
+        bot.send_message(call.message.chat.id, 'Напиши код админа:', reply_markup=markup_cancel)
         bot.register_next_step_handler(call.message, delete_adn)
 
     elif call.data == 'user_ban':
-        bot.send_message(call.message.chat.id, 'Введите его код:')
+        bot.send_message(call.message.chat.id, 'Введите его код:', reply_markup=markup_cancel)
         bot.register_next_step_handler(call.message, user_ban)
+
+    # elif call.data == "cancel_btn":
+    #     bot.send_message(call.message.chat.id, 'Действие отменено', reply_markup=None)
 
 
 def delete_adn(message):
@@ -117,6 +128,7 @@ def delete_adn(message):
     cur.close()
     conn.close()
     bot.send_message(message.chat.id, 'Админ исключен')
+
 
 def user_ban(message):
     conn = sqlite3.connect('Killer.sql')
@@ -135,7 +147,7 @@ def user_ban(message):
         conn.commit()
         cur.close()
         conn.close()
-    else:
+    elif exists_sel:
         bot.send_message(message.text.strip(), 'Вас дисквалифицировали')
         conn = sqlite3.connect('Killer.sql')
         cur = conn.cursor()
@@ -144,6 +156,10 @@ def user_ban(message):
         conn.commit()
         cur.close()
         conn.close()
+    else:
+        bot.send_message(message.chat.id, "Проверьте правильность введенного кода игрока. И повторите попытку")
+        return
+
     bot.send_message(message.chat.id, 'Игрок дисквалифицирован')
 
 
@@ -163,8 +179,6 @@ def get_user_mean(message, name):
     if mean == 'Админ':
         bot.send_message(message.chat.id, f"Введите пароль")
         bot.register_next_step_handler(message, pass_word, name)
-
-
     else:
         loop.run_until_complete(register_user(name, mean, chat_id))
         bot.send_message(message.chat.id, f"Ты зареган\nТвое кодовое слово: {chat_id}")
@@ -182,19 +196,20 @@ async def register_user(name: str, mean: str, chat_id: str):
 
 # Асинхронная функция для проверки существования пользователя
 async def user_exists(chat_id: str):
-    async with aiosqlite.connect('Killer.sql') as db:
-        async with db.execute("SELECT 1 FROM users WHERE chat_id = ?",
-                              (chat_id,)) as cursor:
-            exists = await cursor.fetchone()
-            find = exists is not None
-            if find:
-                return find
-            else:
-                async with aiosqlite.connect('Killer.sql') as db:
-                    async with db.execute("SELECT 1 FROM selected_users WHERE chat_id = ?",
-                                          (chat_id,)) as cursor:
-                        exists1 = await cursor.fetchone()
-                        return exists1 is not None
+    return False
+    # async with aiosqlite.connect('Killer.sql') as db:
+    #     async with db.execute("SELECT 1 FROM users WHERE chat_id = ?",
+    #                           (chat_id,)) as cursor:
+    #         exists = await cursor.fetchone()
+    #         find = exists is not None
+    #         if find:
+    #             return find
+    #         else:
+    #             async with aiosqlite.connect('Killer.sql') as db:
+    #                 async with db.execute("SELECT 1 FROM selected_users WHERE chat_id = ?",
+    #                                       (chat_id,)) as cursor:
+    #                     exists1 = await cursor.fetchone()
+    #                     return exists1 is not None
 
 
 async def register_admin(name: str, chat_id: str):
@@ -241,7 +256,7 @@ def send(message):
                 if assigned_user:
                     bot.send_message(message.chat.id, f"У вас уже закреплен пользователь: {assigned_user[1]}, направление: {assigned_user[2]}")
                 else:
-                    bot.send_message(message.chat.id, f"У вас уже был закреплен пользователь, но его душа неожиданно пропала")
+                    bot.send_message(message.chat.id, f"У вас уже был закреплен пользователь, но его душа исчезла")
 
                     conn = sqlite3.connect('Killer.sql')
                     cur = conn.cursor()
@@ -272,7 +287,7 @@ def send(message):
                 if assigned_user:
                     bot.send_message(message.chat.id, f"У вас уже закреплен пользователь: {assigned_user[1]}, направление: {assigned_user[2]}")
                 else:
-                    bot.send_message(message.chat.id, f"У вас уже был закреплен пользователь, но его душа неожиданно пропала")
+                    bot.send_message(message.chat.id, f"У вас уже был закреплен пользователь, но его душа исчезла")
 
                     conn = sqlite3.connect('Killer.sql')
                     cur = conn.cursor()
@@ -283,49 +298,31 @@ def send(message):
                     conn.close()
             else:
                 select_users(message)
-
     elif message.text == 'Правила':
         bot.send_message(message.chat.id, 'Правила:')
     elif message.text == 'Очистить душу':
-        bot.send_message(message.chat.id, 'Введите кодовое слово')
+        bot.send_message(message.chat.id, 'Введите кодовое слово', reply_markup=markup_cancel)
         bot.register_next_step_handler(message, move_to_bin)
-    elif message.text == 'Список':
+    elif message.text == 'Число онлайн':
         conn = sqlite3.connect('Killer.sql')
         cur = conn.cursor()
-        cur.execute('SELECT * FROM users')
-        users = cur.fetchall()
-        info = 'Чистые души\n'
-        for el in users:
-            info += f'Имя: {el[1]}, Направление: {el[2]},  {el[4]}\n'
-
-        cur.execute('SELECT * FROM selected_users')
-        users = cur.fetchall()
-        info += '\nСвязаные души\n'
-        for el1 in users:
-            info += f'Имя: {el1[1]}, Направление: {el1[2]}, {el1[4]}\n'
+        total_users = len(cur.execute('SELECT * FROM users').fetchall()) + len(cur.execute('SELECT * FROM selected_users').fetchall())
         cur.close()
         conn.close()
 
-        bot.send_message(message.chat.id, info)
+        if (total_users % 10 == 1) and (total_users != 11):
+            bot.send_message(message.chat.id, f"Сейчас в игре {total_users} душа")
+        elif (total_users % 10 in range(2, 5)) and (total_users not in range(12, 15)):
+            bot.send_message(message.chat.id, f"Сейчас в игре {total_users} души")
+        else:
+            bot.send_message(message.chat.id, f"Сейчас в игре {total_users} душ")
 
 
 def move_to_bin(message):
     conn = sqlite3.connect('Killer.sql')
     cur = conn.cursor()
-    exists = (cur.execute("SELECT * FROM users")).fetchall()
-    exists_sel = (cur.execute("SELECT * FROM selected_users").fetchall())
-    cur.close()
-    conn.close()
-
-    if (len(exists_sel) + len(exists)) == 2:
-        bot.send_message(message.chat.id, 'Вы победитель. Поздравляю!!!')
-
-    bot.send_message(message.text.strip(), 'Вас очистили. Вы проиграли')
-
-    conn = sqlite3.connect('Killer.sql')
-    cur = conn.cursor()
     user = cur.execute("SELECT * FROM users WHERE chat_id = ?",
-                         (message.chat.id,)).fetchone()
+                       (message.chat.id,)).fetchone()
     cur.close()
     conn.close()
 
@@ -346,12 +343,7 @@ def move_to_bin(message):
         cur.close()
         conn.close()
 
-    conn = sqlite3.connect('Killer.sql')
-    cur = conn.cursor()
-    name = cur.execute('SELECT name FROM selected_users WHERE chat_id = ?',
-                       (message.text.strip(),)).fetchone()
-    cur.close()
-    conn.close()
+    bot.send_message(message.text.strip(), 'Вас очистили. Вы проиграли')
 
     conn = sqlite3.connect('Killer.sql')
     cur = conn.cursor()
@@ -361,7 +353,18 @@ def move_to_bin(message):
     cur.close()
     conn.close()
 
-    bot.send_message(message.chat.id, f"Душа {name[0]} очищена")
+    conn = sqlite3.connect('Killer.sql')
+    cur = conn.cursor()
+    exists = (cur.execute("SELECT * FROM users")).fetchall()
+    exists_sel = (cur.execute("SELECT * FROM selected_users").fetchall())
+    cur.close()
+    conn.close()
+
+    if (len(exists_sel) + len(exists)) == 1:
+        bot.send_message(message.chat.id, 'Вы победитель. Поздравляю!!!')
+    else:
+        bot.send_message(message.chat.id,f"Душа очищена")
+        select_users(message)
 
 
 def select_users(message):
@@ -463,9 +466,7 @@ def select_users(message):
                 cur.close()
                 conn.close()
         else:
-            bot.send_message(message.chat.id, 'Никого нет дома')
+            bot.send_message(message.chat.id, 'Ошибка...')
 
-def cancel_(message):
-    bot.send_message(message.chat.id, "не ударь в грязь лицом")
 
 bot.polling(none_stop=True)
