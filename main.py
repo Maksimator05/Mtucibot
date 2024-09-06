@@ -33,7 +33,7 @@ def start(message):
     Rulls = types.KeyboardButton('Правила')
     markup.row(Object, Rulls)
     Bin = types.KeyboardButton('Очистить душу')
-    List = types.KeyboardButton('Число онлайн')
+    List = types.KeyboardButton('Число онлайна')
     markup.row(Bin, List)
 
     chat_id = f'{message.chat.id}'
@@ -47,7 +47,7 @@ def start(message):
         bot.send_message(message.chat.id, "Вы уже зарегистрированы!")
     else:
         bot.send_message(message.chat.id,
-                         f'Приветствую, {message.from_user.first_name}!\nТы попал на игру "Собиратель душ" от МТУСИ\nDesigned by maksimator & tunknowng', reply_markup=markup)
+                         f'Приветствую, {message.from_user.first_name}!\nТы попал на игру "Собиратель душ" от МТУСИ', reply_markup=markup)
         bot.send_message(message.chat.id, 'Давай тебя зарегаем. Напиши свое ФИО')
         bot.register_next_step_handler(message, get_username)
 
@@ -62,7 +62,7 @@ def adminstration(message):
     conn.close()
     if admin:
         markup1 = types.InlineKeyboardMarkup()
-        list_info = types.InlineKeyboardButton("Список", callback_data = 'list_info')
+        list_info = types.InlineKeyboardButton("Список", callback_data='list_info')
         delete_admin = types.InlineKeyboardButton("Удалить админа", callback_data='delete_admin')
         markup1.row(list_info, delete_admin)
         user_ban = types.InlineKeyboardButton("Дисквалифицировать участника", callback_data='user_ban')
@@ -72,9 +72,8 @@ def adminstration(message):
         bot.send_message(message.chat.id, "Вы не админ")
 
 
-markup_cancel = types.InlineKeyboardMarkup()
-cancel_btn = types.InlineKeyboardButton("Отмена", callback_data='cancel_btn')
-markup_cancel.row(cancel_btn)
+cancel_status = {}
+
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
@@ -107,18 +106,43 @@ def handle_callback(call):
         bot.send_message(call.message.chat.id, info)
 
     elif call.data == 'delete_admin':
-        bot.send_message(call.message.chat.id, 'Напиши код админа:', reply_markup=markup_cancel)
+        cancel_status[call.message.chat.id] = False
+
+        keyboard_delete_admin = types.InlineKeyboardMarkup()
+        cancel_btn = types.InlineKeyboardButton("Отмена", callback_data='cancel_delete_admin')
+        keyboard_delete_admin.row(cancel_btn)
+
+        bot.send_message(call.message.chat.id, 'Напиши код админа:', reply_markup=keyboard_delete_admin)
         bot.register_next_step_handler(call.message, delete_adn)
 
     elif call.data == 'user_ban':
-        bot.send_message(call.message.chat.id, 'Введите его код:', reply_markup=markup_cancel)
+        cancel_status[call.message.chat.id] = False
+
+        keyboard_delete_user = types.InlineKeyboardMarkup()
+        cancel_btn = types.InlineKeyboardButton("Отмена", callback_data='cancel_delete_user')
+        keyboard_delete_user.row(cancel_btn)
+
+        bot.send_message(call.message.chat.id, 'Введите его код:', reply_markup=keyboard_delete_user)
         bot.register_next_step_handler(call.message, user_ban)
 
-    # elif call.data == "cancel_btn":
-    #     bot.send_message(call.message.chat.id, 'Действие отменено', reply_markup=None)
+    elif call.data == "cancel_delete_admin":
+        bot.send_message(call.message.chat.id, 'Удаление админа отменено', reply_markup=None)
+        cancel_status[call.message.chat.id] = True
+
+    elif call.data == "cancel_delete_user":
+        bot.send_message(call.message.chat.id, 'Дисквалификация игрока отменена', reply_markup=None)
+        cancel_status[call.message.chat.id] = True
+
+    elif call.data == "cancel_soul_clean":
+        bot.send_message(call.message.chat.id, 'Очистка души отменена', reply_markup=None)
+        cancel_status[call.message.chat.id] = True
 
 
 def delete_adn(message):
+    if cancel_status[message.chat.id]:
+        cancel_status[message.chat.id] = False
+        return
+
     bot.send_message(message.text.strip(), 'Вас исключили из администраторов')
     conn = sqlite3.connect('Killer.sql')
     cur = conn.cursor()
@@ -131,10 +155,14 @@ def delete_adn(message):
 
 
 def user_ban(message):
+    if cancel_status[message.chat.id]:
+        cancel_status[message.chat.id] = False
+        return
+
     conn = sqlite3.connect('Killer.sql')
     cur = conn.cursor()
-    exists = (cur.execute("SELECT * FROM users WHERE chat_id = ?", (message.text.strip(),))).fetchone()
-    exists_sel = (cur.execute("SELECT * FROM selected_users WHERE chat_id = ?", (message.text.strip(),))).fetchone()
+    exists = (cur.execute("SELECT * FROM users WHERE chat_id = ?",
+                          (message.text.strip(),))).fetchone()
     cur.close()
     conn.close()
 
@@ -147,18 +175,27 @@ def user_ban(message):
         conn.commit()
         cur.close()
         conn.close()
-    elif exists_sel:
-        bot.send_message(message.text.strip(), 'Вас дисквалифицировали')
+    else:
         conn = sqlite3.connect('Killer.sql')
         cur = conn.cursor()
-        cur.execute('DELETE FROM selected_users WHERE chat_id = ?',
-                    (message.text.strip(),))
-        conn.commit()
+        exists_sel = (cur.execute("SELECT * FROM selected_users WHERE chat_id = ?",
+                                  (message.text.strip(),))).fetchone()
         cur.close()
         conn.close()
-    else:
-        bot.send_message(message.chat.id, "Проверьте правильность введенного кода игрока. И повторите попытку")
-        return
+
+        if exists_sel:
+            bot.send_message(message.text.strip(), 'Вас дисквалифицировали')
+
+            conn = sqlite3.connect('Killer.sql')
+            cur = conn.cursor()
+            cur.execute('DELETE FROM selected_users WHERE chat_id = ?',
+                        (message.text.strip(),))
+            conn.commit()
+            cur.close()
+            conn.close()
+        else:
+            bot.send_message(message.chat.id, "Проверьте правильность введенного кода игрока. И повторите попытку")
+            return
 
     bot.send_message(message.chat.id, 'Игрок дисквалифицирован')
 
@@ -173,8 +210,10 @@ def get_username(message):
 # Функция для получения направления пользователя и его регистрации
 def get_user_mean(message, name):
     mean = message.text
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+
     chat_id = message.chat.id
     if mean == 'Админ':
         bot.send_message(message.chat.id, f"Введите пароль")
@@ -196,20 +235,19 @@ async def register_user(name: str, mean: str, chat_id: str):
 
 # Асинхронная функция для проверки существования пользователя
 async def user_exists(chat_id: str):
-    return False
-    # async with aiosqlite.connect('Killer.sql') as db:
-    #     async with db.execute("SELECT 1 FROM users WHERE chat_id = ?",
-    #                           (chat_id,)) as cursor:
-    #         exists = await cursor.fetchone()
-    #         find = exists is not None
-    #         if find:
-    #             return find
-    #         else:
-    #             async with aiosqlite.connect('Killer.sql') as db:
-    #                 async with db.execute("SELECT 1 FROM selected_users WHERE chat_id = ?",
-    #                                       (chat_id,)) as cursor:
-    #                     exists1 = await cursor.fetchone()
-    #                     return exists1 is not None
+    async with aiosqlite.connect('Killer.sql') as db:
+        async with db.execute("SELECT 1 FROM users WHERE chat_id = ?",
+                              (chat_id,)) as cursor:
+            exists = await cursor.fetchone()
+            find = exists is not None
+            if find:
+                return find
+            else:
+                async with aiosqlite.connect('Killer.sql') as db:
+                    async with db.execute("SELECT 1 FROM selected_users WHERE chat_id = ?",
+                                          (chat_id,)) as cursor:
+                        exists1 = await cursor.fetchone()
+                        return exists1 is not None
 
 
 async def register_admin(name: str, chat_id: str):
@@ -223,9 +261,12 @@ async def register_admin(name: str, chat_id: str):
 
 def pass_word(message, name):
     password_from_user = message.text
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+
     chat_id = message.chat.id
+
     if password_from_user == Pass_Word:
         loop.run_until_complete(register_admin(name, chat_id))
         bot.send_message(message.chat.id, "Вы успешно зарегестрированы, как админ")
@@ -301,9 +342,15 @@ def send(message):
     elif message.text == 'Правила':
         bot.send_message(message.chat.id, 'Правила:')
     elif message.text == 'Очистить душу':
-        bot.send_message(message.chat.id, 'Введите кодовое слово', reply_markup=markup_cancel)
+        cancel_status[message.chat.id] = False
+
+        keyboard_cancel = types.InlineKeyboardMarkup()
+        cancel_btn = types.InlineKeyboardButton("Отмена", callback_data='cancel_soul_clean')
+        keyboard_cancel.row(cancel_btn)
+
+        bot.send_message(message.chat.id, 'Введите кодовое слово', reply_markup=keyboard_cancel)
         bot.register_next_step_handler(message, move_to_bin)
-    elif message.text == 'Число онлайн':
+    elif message.text == 'Число онлайна':
         conn = sqlite3.connect('Killer.sql')
         cur = conn.cursor()
         total_users = len(cur.execute('SELECT * FROM users').fetchall()) + len(cur.execute('SELECT * FROM selected_users').fetchall())
@@ -319,6 +366,10 @@ def send(message):
 
 
 def move_to_bin(message):
+    if cancel_status[message.chat.id]:
+        cancel_status[message.chat.id] = False
+        return
+
     conn = sqlite3.connect('Killer.sql')
     cur = conn.cursor()
     user = cur.execute("SELECT * FROM users WHERE chat_id = ?",
