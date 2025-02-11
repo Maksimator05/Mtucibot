@@ -82,7 +82,6 @@ def adminstration(message):
         markup1.row(user_ban)
         bot.reply_to(message, "Добро пожаловать в администрирование игры", reply_markup=markup1)
 
-
 cancel_status = {}
 
 
@@ -214,24 +213,33 @@ def user_ban(message):
 # Функция для получения имени пользователя и его регистрации
 def get_username(message):
     name = message.text  # Имя пользователя, которое он отправил
-    bot.send_message(message.chat.id, "Отлично! И мне нужно еще твое направление")
-    bot.register_next_step_handler(message, get_user_mean, name)
+
+    if (name == 'Правила') or (name == 'Моя цель') or (name == 'Очистить душу') or (name == 'Число онлайна') or (name == '/start'):
+        bot.send_message(message.chat.id, "Что-то не то, попробуем еще раз. Напиши свое ФИО")
+        bot.register_next_step_handler(message, get_username)
+    else:
+        bot.send_message(message.chat.id, "Отлично! И мне нужно еще твое направление")
+        bot.register_next_step_handler(message, get_user_mean, name)
 
 
 # Функция для получения направления пользователя и его регистрации
 def get_user_mean(message, name):
     mean = message.text
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    chat_id = message.chat.id
-    if mean == 'Админ':
-        bot.send_message(message.chat.id, f"Введите пароль")
-        bot.register_next_step_handler(message, pass_word, name)
+    if (mean == 'Правила') or (mean == 'Моя цель') or (mean == 'Очистить душу') or (mean == 'Число онлайна') or (mean == '/start'):
+        bot.send_message(message.chat.id, "Что-то не то, попробуем еще раз. Напиши своё направление")
+        bot.register_next_step_handler(message, get_user_mean, name)
     else:
-        loop.run_until_complete(register_user(name, mean, chat_id))
-        bot.send_message(message.chat.id, f"Ты зареган\nТвое кодовое слово: {chat_id}")
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        chat_id = message.chat.id
+        if mean == 'Админ':
+            bot.send_message(message.chat.id, f"Введите пароль")
+            bot.register_next_step_handler(message, pass_word, name)
+        else:
+            loop.run_until_complete(register_user(name, mean, chat_id))
+            bot.send_message(message.chat.id, f"Ты зареган\nТвое кодовое слово: {chat_id}")
 
 
 # Асинхронная функция для регистрации пользователя
@@ -513,7 +521,20 @@ def select_users(message):
                 info[line][3] = el1[4]
                 line += 1
 
-            selected_user = copy.deepcopy(random.choice(info))
+            selected_user = list[4]
+            while True:
+                selected_user = copy.deepcopy(random.choice(info))
+
+                conn = sqlite3.connect('Killer.sql')
+                cur = conn.cursor()
+                targeting_users = cur.execute('SELECT * FROM selected_users WHERE NOT target_id = ?',
+                                             (selected_user[2],)).fetchall()
+                cur.close()
+                conn.close()
+
+                if not targeting_users:
+                    break
+
             bot.send_message(message.chat.id, f'Имя: {selected_user[0]}\nНаправление: {selected_user[1]}')
 
             conn = sqlite3.connect('Killer.sql')
@@ -540,7 +561,7 @@ def select_users(message):
                 cur.close()
                 conn.close()
         else:
-            bot.send_message(message.chat.id, 'Ошибка...')
+            bot.send_message(message.chat.id, 'Нет свободной души')
 
 
 bot.polling(none_stop=True)
