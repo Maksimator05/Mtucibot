@@ -178,6 +178,7 @@ def user_ban(message):
 
     if exists:
         bot.send_message(message.text.strip(), 'Вас дисквалифицировали')
+
         conn = sqlite3.connect('Killer.sql')
         cur = conn.cursor()
         cur.execute('DELETE FROM users WHERE chat_id = ?',
@@ -203,6 +204,43 @@ def user_ban(message):
             conn.commit()
             cur.close()
             conn.close()
+
+            # Ищем пользователя с целью равной удаленному пользователю, очищаем поле цели и сообщаем об обновлении цели
+            conn = sqlite3.connect('Killer.sql')
+            cur = conn.cursor()
+            target_user = (cur.execute("SELECT * FROM users WHERE target_id = ?",
+                                       (message.text.strip(),))).fetchone()
+            cur.close()
+            conn.close()
+
+            if target_user:
+                bot.send_message(target_user[3], "Ваша цель обновлена! Проверьте командой: Моя цель")
+
+                conn = sqlite3.connect('Killer.sql')
+                cur = conn.cursor()
+                cur.execute("UPDATE users SET target_id = ? WHERE chat_id = ?",
+                            (None, target_user[3],))
+                conn.commit()
+                cur.close()
+                conn.close()
+            else:
+                conn = sqlite3.connect('Killer.sql')
+                cur = conn.cursor()
+                target_sel_user = (cur.execute("SELECT * FROM selected_users WHERE target_id = ?",
+                                           (message.text.strip(),))).fetchone()
+                cur.close()
+                conn.close()
+
+                if target_sel_user:
+                    bot.send_message(target_sel_user[3], "Ваша цель обновлена! Проверьте командой: Моя цель")
+
+                    conn = sqlite3.connect('Killer.sql')
+                    cur = conn.cursor()
+                    cur.execute("UPDATE selected_users SET target_id = ? WHERE chat_id = ?",
+                                (None, target_sel_user[3],))
+                    conn.commit()
+                    cur.close()
+                    conn.close()
         else:
             bot.send_message(message.chat.id, "Проверьте правильность введенного кода игрока. И повторите попытку")
             return
@@ -564,7 +602,7 @@ def select_users(message):
                 cur.close()
                 conn.close()
         else:
-            bot.send_message(message.chat.id, 'Нет свободной души')
+            bot.send_message(message.chat.id, 'Ни одной свободной души, цель не выдана :(')
 
 
 bot.polling(none_stop=True)
