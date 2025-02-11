@@ -511,6 +511,7 @@ def select_users(message):
                             (message.from_user.id,)).fetchall()
         cur.close()
         conn.close()
+
         if len(selected_users) > 0:
             info = [[0 for j in range(4)] for i in range(len(selected_users))]
             line = 0
@@ -527,12 +528,14 @@ def select_users(message):
 
                 conn = sqlite3.connect('Killer.sql')
                 cur = conn.cursor()
-                targeting_users = cur.execute('SELECT * FROM selected_users WHERE NOT target_id = ?',
+                target_in_users = (cur.execute("SELECT * FROM users WHERE target_id = ?",
+                                               (selected_user[2],)).fetchall())
+                target_in_sel_users = cur.execute('SELECT * FROM selected_users WHERE target_id = ?',
                                              (selected_user[2],)).fetchall()
                 cur.close()
                 conn.close()
 
-                if not targeting_users:
+                if not target_in_users and not target_in_sel_users:
                     break
 
             bot.send_message(message.chat.id, f'Имя: {selected_user[0]}\nНаправление: {selected_user[1]}')
