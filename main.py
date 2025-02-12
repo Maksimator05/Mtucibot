@@ -562,7 +562,7 @@ def select_users(message):
 
             selected_user = list[4]
             double_choice = True
-            while double_choice:
+            while len(info) > 0:
                 selected_user = copy.deepcopy(random.choice(info))
 
                 conn = sqlite3.connect('Killer.sql')
@@ -576,6 +576,10 @@ def select_users(message):
 
                 if not target_in_users and not target_in_sel_users:
                     double_choice = False
+                    break
+                else:
+                    # Удаляем неподходящего пользователя из списка
+                    info.remove(selected_user)
 
             if double_choice:
                 bot.send_message(message.chat.id, 'Ни одной свободной души, цель не выдана :(')
