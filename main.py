@@ -374,28 +374,31 @@ def send(message):
             cur.close()
             conn.close()
 
-            if user and user[4]:
-                conn = sqlite3.connect('Killer.sql')
-                cur = conn.cursor()
-                assigned_user = cur.execute("SELECT * FROM selected_users WHERE chat_id = ?",
-                                            (user[4],)).fetchone()
-                cur.close()
-                conn.close()
-
-                if assigned_user:
-                    bot.send_message(message.chat.id, f"У вас уже закреплен пользователь: {assigned_user[1]}, направление: {assigned_user[2]}")
-                else:
-                    bot.send_message(message.chat.id, f"У вас уже был закреплен пользователь, но его душа исчезла")
-
+            if user:
+                if user[4]:
                     conn = sqlite3.connect('Killer.sql')
                     cur = conn.cursor()
-                    cur.execute("UPDATE selected_users SET target_id = ? WHERE chat_id = ?",
-                                (None, message.chat.id,))
-                    conn.commit()
+                    assigned_user = cur.execute("SELECT * FROM selected_users WHERE chat_id = ?",
+                                                (user[4],)).fetchone()
                     cur.close()
                     conn.close()
+
+                    if assigned_user:
+                        bot.send_message(message.chat.id, f"У вас уже закреплен пользователь: {assigned_user[1]}, направление: {assigned_user[2]}")
+                    else:
+                        bot.send_message(message.chat.id, f"У вас уже был закреплен пользователь, но его душа исчезла")
+
+                        conn = sqlite3.connect('Killer.sql')
+                        cur = conn.cursor()
+                        cur.execute("UPDATE selected_users SET target_id = ? WHERE chat_id = ?",
+                                    (None, message.chat.id,))
+                        conn.commit()
+                        cur.close()
+                        conn.close()
+                else:
+                    select_users(message)
             else:
-                select_users(message)
+                bot.send_message(message.chat.id,f"Ваша душа вне игрового мира")
     elif message.text == 'Правила':
         bot.send_message(message.chat.id, 'Правила:\n'
                                           'Вы должны пройти регистрацию написав свое ФИО!!, а так же свое направление(ИТ, РИТ и т.п.).\n'
@@ -411,14 +414,44 @@ def send(message):
                                           'Приятной игры. Желаем победить!\n\n'
                                           'Designed by maksimator & tunknowng <3')
     elif message.text == 'Очистить душу':
-        cancel_status[message.chat.id] = False
+        # Выполняю проверку присутствия самого игрока в одной из таблиц душ, если нигде его нет, то не выполняем
+        conn = sqlite3.connect('Killer.sql')
+        cur = conn.cursor()
+        exists = cur.execute("SELECT * FROM users WHERE chat_id = ?",
+                             (message.chat.id,)).fetchone()
+        sel_exists = cur.execute("SELECT * FROM selected_users WHERE chat_id = ?",
+                           (message.chat.id,)).fetchone()
+        cur.close()
+        conn.close()
 
-        keyboard_cancel = types.InlineKeyboardMarkup()
-        cancel_btn = types.InlineKeyboardButton("Отмена", callback_data='cancel_soul_clean')
-        keyboard_cancel.row(cancel_btn)
+        if exists:
+            # Выполняется проверка на наличие цели у данного игрока, если цели нет - не выполнять ничего
+            if exists[4]:
+                cancel_status[message.chat.id] = False
 
-        bot.send_message(message.chat.id, 'Введите кодовое слово', reply_markup=keyboard_cancel)
-        bot.register_next_step_handler(message, move_to_bin)
+                keyboard_cancel = types.InlineKeyboardMarkup()
+                cancel_btn = types.InlineKeyboardButton("Отмена", callback_data='cancel_soul_clean')
+                keyboard_cancel.row(cancel_btn)
+
+                bot.send_message(message.chat.id, 'Введите кодовое слово', reply_markup=keyboard_cancel)
+                bot.register_next_step_handler(message, move_to_bin)
+            else:
+                bot.send_message(message.chat.id, f"Вам не назначена цель, очистка душ недоступна")
+        elif sel_exists:
+            # Выполняется проверка на наличие цели у данного игрока, если цели нет - не выполнять ничего
+            if sel_exists[4]:
+                cancel_status[message.chat.id] = False
+
+                keyboard_cancel = types.InlineKeyboardMarkup()
+                cancel_btn = types.InlineKeyboardButton("Отмена", callback_data='cancel_soul_clean')
+                keyboard_cancel.row(cancel_btn)
+
+                bot.send_message(message.chat.id, 'Введите кодовое слово', reply_markup=keyboard_cancel)
+                bot.register_next_step_handler(message, move_to_bin)
+            else:
+                bot.send_message(message.chat.id, f"Вам не назначена цель, очистка душ недоступна")
+        else:
+            bot.send_message(message.chat.id, f"Ваша душа вне игрового мира")
     elif message.text == 'Число онлайна':
         conn = sqlite3.connect('Killer.sql')
         cur = conn.cursor()
